@@ -1,136 +1,107 @@
 # shipcheck
 
-**A pip-installable artifact can still be broken.** shipcheck verifies
-release artifacts *before* they reach an index: it reopens every wheel and
-sdist under `dist/`, reinstalls wheels into a throwaway dir, imports them,
-and compares filename versions against their own metadata. One command per
-gate - run it after every build.
+**Verify the artifact you are about to ship - by shipping it to yourself.** Reopen every wheel and sdist, reinstall the wheels into a throwaway environment, import the package, compare its metadata against the source tree, catch stale builds. The PyPI upload that embarrasses you is always a *packaging* failure, and it is findable in seconds - before upload.
+
+[![tests](https://img.shields.io/github/actions/workflow/status/F0Rextasy/shipcheck/test.yml?branch=master&label=tests&style=flat-square&color=3fb950)](https://github.com/F0Rextasy/shipcheck/actions/workflows/test.yml)
+[![python](https://img.shields.io/badge/python-3.8%2B-3776AB?logo=python&logoColor=white&style=flat-square)](https://www.python.org/)
+[![license](https://img.shields.io/badge/license-MIT-3fb950?style=flat-square)](LICENSE)
+
+![shipcheck rejecting an unimportable wheel](assets/demo.svg)
 
 ## Why this exists
 
-pip installing an artifact proves nothing: an empty wheel installs fine, a
-renamed file keeps its old METADATA, a console script can point at a module
-that was never shipped. Those failures surface on user machines, days
-later, as one-star issues. shipcheck is a four-part quality-gate family
-for agent and human work:
+The tests passed on `main`. The wheel was built, twine upload went green, and users got a package that dies on `import` - the build had picked up an old `__version__`, or the module was never added to the wheel, or `dist/` still held last month's artifact. Tests validate your *source*; nobody was validating the *artifact*. `shipcheck` treats the built package as the product: it installs it the way pip will, imports it the way users will, and diffs its metadata against the tree you thought you shipped.
 
-| Gate | Catches |
+## Quick start
+
+```bash
+git clone https://github.com/F0Rextasy/shipcheck
+cd myproject && python -m build
+python /path/to/shipcheck/scripts/shipcheck.py dist --src .
+```
+
+| Exit | Meaning |
 | --- | --- |
-| **preflight** | `prod` in debug, `example.com` URLs, wildcard CORS, flat `requirements` |
-| **prove-it** | claims (`all tests pass`) with no executed command + exit code behind them |
-| **testgate** | tests that can never fail - the green that proves nothing |
-| shipcheck: verifies release artifacts before they reach an index *(this repo)* |
+| `0` | every artifact opens, installs, imports, matches its metadata |
+| `1` | a broken artifact (or a warning with `--strict`) |
+| `2` | usage error |
 
-Copies the family contract: one Python script, zero dependencies, exit 0 =
-clean, 1 = broken artifact, 2 = usage error, `--strict` also fails
-warnings.
+`--allow RULE=reason` exempts one rule with a recorded reason; `--format json` for machines.
 
-## Install
+## What it checks
 
-Single script, stdlib only (Python 3.8+). Vendor it or run in place:
-
-```bash
-cp scripts/shipcheck.py your-repo/scripts/
-python -m build
-python scripts/shipcheck.py dist/ --src .
+```mermaid
+flowchart TD
+    A["dist/: wheels + sdists"] --> B["reopen: archive integrity,<br/>dist-info completeness"]
+    B --> C["reinstall wheel into<br/>throwaway environment"]
+    C --> D["import the package:<br/>does it actually load?"]
+    D --> E["metadata vs --src tree:<br/>name, version, entry points,<br/>stale artifacts"]
+    B -- "corrupt archive" --> X["FAIL: artifact broken - exit 1"]
+    C -- "cannot install" --> X
+    E -- "mismatch / stale" --> X
+    D -- "import error" --> X
+    B & C & E --> OK["ok: artifacts verified"]
 ```
 
-Or as an Agent Skill:
+Full rule catalogue with severity and the `--allow` exemption contract: [references/RULES.md](references/RULES.md).
 
-```
-/shipcheck  # in Claude Code, Codex, Cursor, or any Agent Skills client
-```
+## Evidence (real output)
 
-## Usage
+A wheel that does not import - caught from `dist/`, no upload attempted:
 
 ```console
-$ python scripts/shipcheck.py dist/ --src .
-dist/empty-0.1.0-py3-none-any.whl
-  L1    FAIL  empty-package      wheel contains no Python modules
-
-shipcheck: 1 failure, 0 warnings across 2 artifacts (0 exempt by --allow)
+$ python scripts/shipcheck.py examples/dist-broken
+shipcheck/examples/dist-broken\mypkg-0.1.0-py3-none-any.whl
+  L1    FAIL  unimportable       import mypkg failed: SyntaxError: invalid syntax
+shipcheck: 1 failure, 0 warnings across 1 artifact (0 exempt by --allow)
 shipcheck: rebuild, fix, or pass --allow RULE=reason
 [exit 1]
 ```
 
-Point it at a `dist/` dir or a single artifact. The install step uses
-`pip install --no-deps --no-index --target <tmpdir>`: no network,
-hermetic, ~seconds per wheel. `--format json` emits machine-readable
-findings; `--strict` also fails warnings. Binary artifacts cannot hold
-comments, so exemptions travel on the command line and land in the log:
-
-```bash
-python scripts/shipcheck.py dist/ --allow unimportable="needs GPU at runtime"
-```
-
-## The rules
-
-| Rule | Severity | Finds |
-| --- | --- | --- |
-| `empty-package` | fail | archive ships no Python modules |
-| `unimportable` | fail | pip installs it, `import` fails |
-| `metadata-mismatch` | fail | filename version disagrees with METADATA / PKG-INFO |
-| `broken-entrypoint` | fail | console script points at a module not in the archive |
-| `stale-artifact` | warn | source tree newer than `dist/` - you forgot to rebuild |
-| `no-dist` / `unreadable-dist` | warn | nothing to gate, or an unopenable archive |
-
-Full catalogue with method notes: [references/RULES.md](references/RULES.md).
-
-Wheels get the full gate (open, reinstall, import, metadata, entry
-points). Sdists get structural checks - installing one requires a build,
-which is the builder's job; the gate verifies real modules are inside.
-
-## Evidence (real outputs)
-
-Broken demo dist (empty wheel + mislabeled version, built with stdlib):
+The same gate green on a fresh build (fixture reproducible: `python examples/make_fixtures.py`):
 
 ```console
-$ python scripts/shipcheck.py examples/demo-dist-broken --src examples/src
-examples/demo-dist-broken\emptything-0.1.0-py3-none-any.whl
-  L1    FAIL  empty-package      wheel contains no Python modules
-examples/demo-dist-broken\mislabeled-0.2.0-py3-none-any.whl
-  L1    FAIL  metadata-mismatch  filename says 0.2.0, METADATA says 0.1.0
-shipcheck: 2 failures, 0 warnings across 2 artifacts (0 exempt by --allow)
-shipcheck: rebuild, fix, or pass --allow RULE=reason
-[exit 1]
-```
-
-Clean dist (built by `examples/make_fixtures.py`):
-
-```console
-$ python examples/make_fixtures.py && python scripts/shipcheck.py examples/dist --src examples/src
-built fixtures in .../examples/dist
+$ python scripts/shipcheck.py examples/dist --src examples/src
 shipcheck: clean -- 2 artifacts checked, 0 findings (0 exempt by --allow)
 [exit 0]
 ```
 
-Contract tests, 9 for 9:
+Try the fixtures: `examples/dist` is deliberately clean, `examples/dist-broken` deliberately is not.
 
-```console
-$ python -m unittest discover -s tests -v
-.........
-----------------------------------------------------------------------
-Ran 9 tests in 11.039s
+## Wire it into CI
 
-OK
-[exit 0]
+```yaml
+- uses: actions/checkout@v4
+- uses: actions/setup-python@v5
+  with:
+    python-version: "3.12"
+- run: python -m build
+- name: artifact gate
+  run: python shipcheck/scripts/shipcheck.py dist --src . --strict
 ```
 
-Every test builds real wheels/sdists with the stdlib, installs real wheels
-with pip, and asserts the observable exit code and findings.
+The last step between `python -m build` and `twine upload`.
 
-## Layout
+## What it will never do
 
-```text
-shipcheck/
-+-- scripts/shipcheck.py    # the gate (stdlib only, ~380 lines)
-+-- SKILL.md                # Agent Skill (Claude Code / Codex / Cursor)
-+-- examples/make_fixtures.py # deterministic fixture builder (stdlib)
-+-- references/RULES.md     # rule catalogue, method, escape hatch
-+-- tests/test_shipcheck.py # contract tests building real artifacts
-```
+- Trust a filename: artifacts are reopened as archives and installed, not inspected from the outside.
+- Touch your real environment: reinstall goes into a throwaway target.
+- Skip silently: an unreadable `dist/` is a usage error (exit 2), never a green run.
 
-(`examples/dist` is built, not committed - see `.gitignore`.)
+## The family
+
+Deterministic gates - one Python script each, stdlib, same exit contract:
+
+| Gate | Catches |
+| --- | --- |
+| [preflight](https://github.com/F0Rextasy/preflight) | committed `.env`, weak secrets, debug-in-prod, wildcard CORS |
+| [bandaid](https://github.com/F0Rextasy/bandaid) | symptom-suppression patches: swallowed errors, disabled tests, removed guards |
+| [prove-it](https://github.com/F0Rextasy/prove-it) | claims with no executed evidence behind them |
+| [testgate](https://github.com/F0Rextasy/testgate) | tests that can never fail |
+| **shipcheck** (this repo) | broken, unimportable, or stale release artifacts |
+| [dsh-gate](https://github.com/F0Rextasy/dsh-gate) | red turns closing green in DeepSeek Harness |
+| [ci-triage](https://github.com/F0Rextasy/ci-triage) | red CI triaged without an LLM |
+| [docproof](https://github.com/F0Rextasy/docproof) | documentation snippets that no longer parse or run |
 
 ## License
 
