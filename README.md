@@ -4,6 +4,7 @@
 
 [![tests](https://img.shields.io/github/actions/workflow/status/F0Rextasy/shipcheck/test.yml?branch=master&label=tests&style=flat-square&color=3fb950)](https://github.com/F0Rextasy/shipcheck/actions/workflows/test.yml)
 [![python](https://img.shields.io/badge/python-3.8%2B-3776AB?logo=python&logoColor=white&style=flat-square)](https://www.python.org/)
+[![skills](https://skills.sh/b/F0Rextasy/shipcheck?style=flat-square)](https://skills.sh/F0Rextasy/shipcheck)
 [![license](https://img.shields.io/badge/license-MIT-3fb950?style=flat-square)](LICENSE)
 
 ![shipcheck rejecting an unimportable wheel](assets/demo.svg)
@@ -15,6 +16,10 @@ The tests passed on `main`. The wheel was built, twine upload went green, and us
 ## Quick start
 
 ```bash
+# install the skill into any agent (Claude Code, Codex, Cursor, OpenCode, ...):
+npx skills add F0Rextasy/shipcheck
+
+# or run it directly:
 git clone https://github.com/F0Rextasy/shipcheck
 cd myproject && python -m build
 python /path/to/shipcheck/scripts/shipcheck.py dist --src .
