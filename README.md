@@ -93,20 +93,27 @@ The last step between `python -m build` and `twine upload`.
 - Touch your real environment: reinstall goes into a throwaway target.
 - Skip silently: an unreadable `dist/` is a usage error (exit 2), never a green run.
 
-## The family
+## One path, many gates — the family
 
 Deterministic gates - one Python script each, stdlib, same exit contract:
 
-| Gate | Catches |
-| --- | --- |
-| [preflight](https://github.com/F0Rextasy/preflight) | committed `.env`, weak secrets, debug-in-prod, wildcard CORS |
-| [bandaid](https://github.com/F0Rextasy/bandaid) | symptom-suppression patches: swallowed errors, disabled tests, removed guards |
-| [prove-it](https://github.com/F0Rextasy/prove-it) | claims with no executed evidence behind them |
-| [testgate](https://github.com/F0Rextasy/testgate) | tests that can never fail |
-| **shipcheck** (this repo) | broken, unimportable, or stale release artifacts |
-| [dsh-gate](https://github.com/F0Rextasy/dsh-gate) | red turns closing green in DeepSeek Harness |
-| [ci-triage](https://github.com/F0Rextasy/ci-triage) | red CI triaged without an LLM |
-| [docproof](https://github.com/F0Rextasy/docproof) | documentation snippets that no longer parse or run |
+| Repo | What its verdict means |
+| --- | ---|
+| [dsh-gate](https://github.com/F0Rextasy/dsh-gate) | the shell session actually ran - real commands, real files, real log |
+| [sessionaudit](https://github.com/F0Rextasy/sessionaudit) | the session behaved - scope, secrets, destructive acts, self-contradicted claims |
+| [cigate](https://github.com/F0Rextasy/cigate) | the workflows burn each minute once - pins, path filters, dedup, budget |
+| [ci-triage](https://github.com/F0Rextasy/ci-triage) | one log, one verdict: regression / flaky / infra / pass |
+| [docproof](https://github.com/F0Rextasy/docproof) | every README doc snippet is runnable, parsed, and verified in CI |
+| [preflight](https://github.com/F0Rextasy/preflight) | the config is safe to ship - semantics, not syntax |
+| [prove-it](https://github.com/F0Rextasy/prove-it) | every claim in this README is backed by real, captured output |
+| [shipcheck](https://github.com/F0Rextasy/shipcheck) | the artifacts in `dist/` match `src/` - nothing stale ships |
+| [testgate](https://github.com/F0Rextasy/testgate) | the tests that ran are the tests that exist - gaps, dupes, skips |
+| [bandaid](https://github.com/F0Rextasy/bandaid) | the diff doesn't hide a silent failure - swallowed errors, dead guards |
+| [wincompat](https://github.com/F0Rextasy/wincompat) | every path in the tree survives a Windows checkout |
+| [compressproof](https://github.com/F0Rextasy/compressproof) | the context shrank without losing an answer - reversible compression, byte proof, answer-equivalence oracle |
+| [uigate](https://github.com/F0Rextasy/uigate) | the UI stops looking like the same AI slop - measurable design-slop lint, WCAG + template tells |
+| [aitell](https://github.com/F0Rextasy/aitell) | the prose stops reading as AI - deterministic AI-tell detection with a published confusion matrix |
+| [route-drift](https://github.com/F0Rextasy/route-drift) | OpenAPI spec vs code routes drift gate |
 
 ## License
 
