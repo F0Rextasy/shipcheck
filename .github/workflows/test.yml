@@ -1,0 +1,18 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: contract tests
+        run: python -m unittest discover -s tests -v
+      - name: build fixtures and gate them
+        run: python examples/make_fixtures.py && python scripts/shipcheck.py examples/dist --src examples/src
